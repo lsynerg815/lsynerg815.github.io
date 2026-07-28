@@ -110,12 +110,13 @@
     direction = directions.right;
     queuedDirection = direction;
     score = 0;
-    enemies = [{ x: 5, y: 5 }];
+    enemies = [];
     foodsEaten = 0;
     powerActive = false;
     powerRemaining = 0;
     blinkVisible = true;
     food = openCell();
+    enemies = [openEnemyCell()];
     updateScore();
     drawBoard();
   };
@@ -154,7 +155,9 @@
       return next.x >= 0 && next.x < grid.columns && next.y >= 0 && next.y < grid.rows
         && !enemies.some((other, otherIndex) => otherIndex !== index && sameCell(other, next));
     });
-    return options.length ? { ...obstacle, ...options[Math.floor(Math.random() * options.length)] } : obstacle;
+  if (!options.length) return obstacle;
+  const move = options[Math.floor(Math.random() * options.length)];
+  return { ...obstacle, x: obstacle.x + move.x, y: obstacle.y + move.y };
   };
 
   const endGame = () => {
@@ -180,6 +183,7 @@
     if (hitEnemyIndex !== -1) {
       if (!powerActive) return endGame();
       enemies.splice(hitEnemyIndex, 1);
+      score += 10;
       beep(1040, 0.1);
     }
     snake.unshift(head);
@@ -193,11 +197,20 @@
     } else {
       snake.pop();
     }
-    enemies = enemies.map(moveEnemy);
+  const movingEnemies = [...enemies];
+  const movedEnemies = [];
+  for (const enemy of movingEnemies) {
+    const movedEnemy = moveEnemy(enemy, movingEnemies.indexOf(enemy));
+    movedEnemies.push(movedEnemy);
+    enemies = [...movedEnemies, ...movingEnemies.slice(movedEnemies.length)];
+  }
+  enemies = movedEnemies;
     const movedIntoSnake = enemies.some((obstacle) => sameCell(obstacle, snake[0]));
     if (movedIntoSnake) {
       if (!powerActive) return endGame();
+      const enemyCountBeforeRemoval = enemies.length;
       enemies = enemies.filter((obstacle) => !sameCell(obstacle, snake[0]));
+      score += (enemyCountBeforeRemoval - enemies.length) * 10;
     }
     updateScore();
     drawBoard();
