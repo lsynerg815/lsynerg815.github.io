@@ -72,6 +72,9 @@ p { max-width: 42rem; color: var(--muted); }
 .game-toolbar { margin-bottom: 0.8rem; color: var(--muted); font-size: 0.82rem; }
 .game-toolbar strong { color: var(--electric-pink); font-size: 1.05rem; }
 #game-status { color: var(--electric-cyan); }
+#power-status { color: var(--muted); }
+#power-status.active { color: var(--electric-pink); text-shadow: 0 0 12px rgba(255, 60, 172, 0.8); }
+#power-timer { color: var(--electric-pink); }
 #game-board { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; border: 1px solid var(--line); background: #03090d; image-rendering: pixelated; }
 .game-actions { justify-content: flex-start; margin-top: 0.8rem; }
 .game-button, .touch-controls button { border: 1px solid var(--line); background: rgba(0, 245, 212, 0.08); color: var(--text); cursor: pointer; font: inherit; }
@@ -81,6 +84,9 @@ p { max-width: 42rem; color: var(--muted); }
 .touch-controls { display: none; margin-top: 0.8rem; text-align: center; }
 .touch-controls button { width: 2.8rem; height: 2.4rem; margin: 0.15rem; }
 .game-help { grid-column: 2 !important; margin: 0.75rem 0 0; font-size: 0.76rem; }
+.tree-game-section > p:not(.section-kicker) { max-width: 56rem; }
+.tree-game-frame { width: min(66vw, 720px); padding: 1rem; border: 1px dashed var(--electric-pink); background: var(--surface); box-shadow: inset 0 0 34px rgba(255, 60, 172, 0.08); }
+#tree-board { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; border: 1px solid rgba(255, 60, 172, 0.35); background: #07130f; image-rendering: pixelated; }
 .site-footer { width: min(1120px, calc(100% - 3rem)); margin: 0 auto; padding: 2rem 0; border-top: 1px solid var(--line); font-size: 0.85rem; }
 
 @media (max-width: 700px) {
@@ -92,6 +98,7 @@ p { max-width: 42rem; color: var(--muted); }
   .game-preview { display: block; }
   .game-frame { min-height: 12rem; margin-top: 1.5rem; }
   .game-module { width: 100%; }
+  .tree-game-frame { width: 100%; }
   .touch-controls { display: block; }
 }
 

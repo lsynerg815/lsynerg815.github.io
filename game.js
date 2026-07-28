@@ -5,6 +5,9 @@
   const context = canvas.getContext('2d');
   const scoreElement = document.querySelector('#score');
   const highScoreElement = document.querySelector('#high-score');
+  const enemyCountElement = document.querySelector('#enemy-count');
+  const powerStatusElement = document.querySelector('#power-status');
+  const powerTimerElement = document.querySelector('#power-timer');
   const statusElement = document.querySelector('#game-status');
   const startButton = document.querySelector('#start-game');
   const pauseButton = document.querySelector('#pause-game');
@@ -17,21 +20,30 @@
   const highScoreKey = 'ver-neon-snake-high-score';
   let snake;
   let food;
-  let enemy;
+  let enemies;
   let direction;
   let queuedDirection;
   let state = 'idle';
   let score = 0;
   let animationId = null;
   let lastTick = 0;
+  let lastFrameTime = 0;
   let soundEnabled = true;
   let audioContext = null;
+  let foodsEaten = 0;
+  let powerActive = false;
+  let powerRemaining = 0;
+  let blinkVisible = true;
 
   const readHighScore = () => Number(localStorage.getItem(highScoreKey) || 0);
 
   const updateScore = () => {
     scoreElement.textContent = String(score);
     highScoreElement.textContent = String(Math.max(score, readHighScore()));
+    enemyCountElement.textContent = String(enemies.length);
+    powerStatusElement.textContent = powerActive ? 'ON' : 'OFF';
+    powerStatusElement.classList.toggle('active', powerActive);
+    powerTimerElement.textContent = powerActive ? `${(powerRemaining / 1000).toFixed(1)}s` : '';
   };
 
   const setStatus = (message) => { statusElement.textContent = message; };
@@ -45,7 +57,13 @@
 
   const openCell = () => {
     let cell = randomCell();
-    while (snake.some((part) => sameCell(part, cell)) || sameCell(cell, enemy)) cell = randomCell();
+    while (snake.some((part) => sameCell(part, cell)) || enemies.some((obstacle) => sameCell(obstacle, cell))) cell = randomCell();
+    return cell;
+  };
+
+  const openEnemyCell = () => {
+    let cell = randomCell();
+    while (snake.some((part) => sameCell(part, cell)) || sameCell(food, cell) || enemies.some((obstacle) => sameCell(obstacle, cell))) cell = randomCell();
     return cell;
   };
 
@@ -70,7 +88,7 @@
       context.beginPath(); context.moveTo(0, y * grid.cell); context.lineTo(canvas.width, y * grid.cell); context.stroke();
     }
     if (food) drawCell(food, '#ff3cac', '#ff3cac');
-    if (enemy) drawCell(enemy, '#f7b801', '#f7b801');
+    if (blinkVisible) enemies.forEach((obstacle) => drawCell(obstacle, '#f7b801', '#f7b801'));
     if (snake) snake.forEach((part, index) => drawCell(part, index === 0 ? '#e8fff6' : '#00f5d4', '#00f5d4'));
   };
 
@@ -92,7 +110,11 @@
     direction = directions.right;
     queuedDirection = direction;
     score = 0;
-    enemy = { x: 5, y: 5 };
+    enemies = [{ x: 5, y: 5 }];
+    foodsEaten = 0;
+    powerActive = false;
+    powerRemaining = 0;
+    blinkVisible = true;
     food = openCell();
     updateScore();
     drawBoard();
@@ -105,12 +127,34 @@
     if (next && validDirection(next)) queuedDirection = next;
   };
 
-  const moveEnemy = () => {
+  const activatePower = () => {
+    if (powerActive) return;
+    powerActive = true;
+    powerRemaining = 3000;
+    blinkVisible = true;
+    setStatus('POWER ACTIVE');
+    beep(880, 0.12);
+  };
+
+  const updatePower = (elapsed) => {
+    if (!powerActive) return;
+    powerRemaining = Math.max(0, powerRemaining - elapsed);
+    blinkVisible = Math.floor(powerRemaining / 120) % 2 === 0;
+    if (powerRemaining === 0) {
+      powerActive = false;
+      blinkVisible = true;
+      setStatus('RUNNING');
+    }
+    updateScore();
+  };
+
+  const moveEnemy = (obstacle, index) => {
     const options = Object.values(directions).filter((candidate) => {
-      const next = { x: enemy.x + candidate.x, y: enemy.y + candidate.y };
-      return next.x >= 0 && next.x < grid.columns && next.y >= 0 && next.y < grid.rows;
+      const next = { x: obstacle.x + candidate.x, y: obstacle.y + candidate.y };
+      return next.x >= 0 && next.x < grid.columns && next.y >= 0 && next.y < grid.rows
+        && !enemies.some((other, otherIndex) => otherIndex !== index && sameCell(other, next));
     });
-    enemy = { ...enemy, ...options[Math.floor(Math.random() * options.length)] };
+    return options.length ? { ...obstacle, ...options[Math.floor(Math.random() * options.length)] } : obstacle;
   };
 
   const endGame = () => {
@@ -131,30 +175,49 @@
     const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
     const hitWall = head.x < 0 || head.x >= grid.columns || head.y < 0 || head.y >= grid.rows;
     const hitSelf = snake.some((part) => sameCell(part, head));
-    if (hitWall || hitSelf || sameCell(head, enemy)) return endGame();
+    const hitEnemyIndex = enemies.findIndex((obstacle) => sameCell(head, obstacle));
+    if (hitWall || hitSelf) return endGame();
+    if (hitEnemyIndex !== -1) {
+      if (!powerActive) return endGame();
+      enemies.splice(hitEnemyIndex, 1);
+      beep(1040, 0.1);
+    }
     snake.unshift(head);
     if (sameCell(head, food)) {
       score += 10;
+      foodsEaten += 1;
       food = openCell();
+      enemies.push(openEnemyCell());
+      if (foodsEaten % 4 === 0) activatePower();
       beep(660);
     } else {
       snake.pop();
     }
-    moveEnemy();
-    if (sameCell(enemy, snake[0])) return endGame();
+    enemies = enemies.map(moveEnemy);
+    const movedIntoSnake = enemies.some((obstacle) => sameCell(obstacle, snake[0]));
+    if (movedIntoSnake) {
+      if (!powerActive) return endGame();
+      enemies = enemies.filter((obstacle) => !sameCell(obstacle, snake[0]));
+    }
     updateScore();
     drawBoard();
   };
 
   const gameLoop = (timestamp) => {
     if (state !== 'running') { animationId = null; return; }
+    const elapsed = lastFrameTime ? timestamp - lastFrameTime : 0;
+    lastFrameTime = timestamp;
+    const wasPowerActive = powerActive;
+    updatePower(elapsed);
     if (timestamp - lastTick >= 145) { lastTick = timestamp; tick(); }
+    if (powerActive || wasPowerActive) drawBoard();
     animationId = state === 'running' ? window.requestAnimationFrame(gameLoop) : null;
   };
 
   const startGame = () => {
     if (state === 'idle' || state === 'over') resetGame();
     state = 'running';
+    lastFrameTime = 0;
     startButton.disabled = true;
     pauseButton.disabled = false;
     setStatus('RUNNING');
@@ -163,13 +226,13 @@
   };
 
   const pauseGame = () => {
-    if (state === 'running') { state = 'paused'; pauseButton.textContent = '계속'; setStatus('PAUSED'); }
-    else if (state === 'paused') { state = 'running'; pauseButton.textContent = '일시정지'; setStatus('RUNNING'); animationId = window.requestAnimationFrame(gameLoop); }
+    if (state === 'running') { state = 'paused'; lastFrameTime = 0; pauseButton.textContent = '계속'; setStatus('PAUSED'); }
+    else if (state === 'paused') { state = 'running'; lastFrameTime = 0; pauseButton.textContent = '일시정지'; setStatus(powerActive ? 'POWER ACTIVE' : 'RUNNING'); animationId = window.requestAnimationFrame(gameLoop); }
   };
 
   const restartGame = () => {
     if (animationId !== null) window.cancelAnimationFrame(animationId);
-    animationId = null; state = 'idle'; pauseButton.textContent = '일시정지'; pauseButton.disabled = true; startButton.disabled = false; setStatus('시작을 눌러 준비'); resetGame();
+    animationId = null; lastFrameTime = 0; state = 'idle'; pauseButton.textContent = '일시정지'; pauseButton.disabled = true; startButton.disabled = false; setStatus('시작을 눌러 준비'); resetGame();
   };
 
   document.addEventListener('keydown', (event) => {
