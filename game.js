@@ -131,7 +131,7 @@
   const activatePower = () => {
     if (powerActive) return;
     powerActive = true;
-    powerRemaining = 3000;
+    powerRemaining = 10000;
     blinkVisible = true;
     setStatus('POWER ACTIVE');
     beep(880, 0.12);
